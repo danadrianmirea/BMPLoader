@@ -1,0 +1,7 @@
+*.pdb
+*.exe
+*.idea
+
+/build/
+/libraries/
+cmake
