@@ -2,9 +2,9 @@
 #include <fstream>
 #include <vector>
 #include <cstdint>
-
+#include <string>
+#include <filesystem>
 #include <windows.h>
-
 
 // BMP file header structure
 #pragma pack(push, 1)
@@ -118,47 +118,105 @@ void BMPImage::printInfo() const {
     std::cout << "Bit Depth: " << infoHeader.bitCount << "\n";
 }
 
-// Display the TGA image using Win32
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    static BMPImage image;
-    static HDC hdcMem = nullptr;
-    static HBITMAP hBitmap = nullptr;
+// Function to get all BMP file paths in a directory
+std::vector<std::string> getBMPFiles(const std::string& directory) {
+    std::vector<std::string> bmpFiles;
+    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+        if (entry.path().extension() == ".bmp") {
+            bmpFiles.push_back(entry.path().string());
+        }
+    }
+    return bmpFiles;
+}
 
+// Globals to keep track of images and current index
+std::vector<std::string> bmpFiles;
+int currentImageIndex = 0;
+BMPImage image;
+HDC hdcMem = nullptr;
+HBITMAP hBitmap = nullptr;
+
+// Load the image at the current index
+bool loadCurrentImage(HWND hwnd) {
+    if (hdcMem) DeleteDC(hdcMem);
+    if (hBitmap) DeleteObject(hBitmap);
+
+    if (!image.load(bmpFiles[currentImageIndex])) {
+        MessageBox(hwnd, "Failed to load BMP file", "Error", MB_OK | MB_ICONERROR);
+        return false;
+    }
+
+    // Get the image dimensions
+    int imageWidth = image.getWidth();
+    int imageHeight = image.getHeight();
+
+    // Adjust window size to fit the image
+    RECT rect = { 0, 0, imageWidth, imageHeight };
+    AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
+
+    SetWindowPos(hwnd, nullptr, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+        SWP_NOMOVE | SWP_NOZORDER);
+
+    HDC hdc = GetDC(hwnd);
+    hdcMem = CreateCompatibleDC(hdc);
+
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = image.getWidth();
+    bmi.bmiHeader.biHeight = -image.getHeight();
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32; // 32-bit color
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    void* bitmapData = nullptr;
+    hBitmap = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bitmapData, nullptr, 0);
+
+    if (bitmapData) {
+        memcpy(bitmapData, image.getPixels().data(), image.getPixels().size() * sizeof(BMPColor));
+    }
+
+    SelectObject(hdcMem, hBitmap);
+    ReleaseDC(hwnd, hdc);
+    InvalidateRect(hwnd, nullptr, TRUE);  // Request a repaint
+
+    return true;
+}
+
+// Window procedure to handle events
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE: {
-        if (!image.load("testimage.bmp")) {
-            MessageBox(hwnd, "Failed to load BMP file", "Error", MB_OK | MB_ICONERROR);
+        bmpFiles = getBMPFiles(".\\");
+        if (bmpFiles.empty()) {
+            MessageBox(hwnd, "No BMP files found in the 'images' folder", "Error", MB_OK | MB_ICONERROR);
             PostQuitMessage(0);
             return 0;
         }
-
-        HDC hdc = GetDC(hwnd);
-        hdcMem = CreateCompatibleDC(hdc);
-
-        BITMAPINFO bmi = {};
-        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        bmi.bmiHeader.biWidth = image.getWidth();
-        bmi.bmiHeader.biHeight = -image.getHeight();
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 32; // 32-bit color
-        bmi.bmiHeader.biCompression = BI_RGB;
-
-        // Create DIB Section and link directly to the image pixel data
-        void* bitmapData = nullptr;
-        hBitmap = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bitmapData, nullptr, 0);
-
-        // Copy pixels to the DIB section if needed
-        if (bitmapData) {
-            memcpy(bitmapData, image.getPixels().data(), image.getPixels().size() * sizeof(BMPColor));
+        currentImageIndex = 0;
+        if (!loadCurrentImage(hwnd)) {
+            PostQuitMessage(0);
         }
-
-        SelectObject(hdcMem, hBitmap);
-        ReleaseDC(hwnd, hdc);
+    } break;
+    case WM_KEYDOWN: {
+        if (wParam == VK_RIGHT) { // Right arrow key
+            currentImageIndex = (currentImageIndex + 1) % bmpFiles.size();
+            loadCurrentImage(hwnd);
+        }
+        else if (wParam == VK_LEFT) { // Left arrow key
+            currentImageIndex = (currentImageIndex - 1 + bmpFiles.size()) % bmpFiles.size();
+            loadCurrentImage(hwnd);
+        }
     } break;
 
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
+
+        // Clear the window with a white background
+        RECT rect;
+        GetClientRect(hwnd, &rect);
+        FillRect(hdc, &rect, (HBRUSH)(COLOR_WINDOW + 1));
+
         BitBlt(hdc, 0, 0, image.getWidth(), image.getHeight(), hdcMem, 0, 0, SRCCOPY);
         EndPaint(hwnd, &ps);
     } break;
@@ -177,7 +235,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 // Win32 entry point
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
-    const char CLASS_NAME[] = "PNGWindowClass";
+    const char CLASS_NAME[] = "BMPViewer";
 
     WNDCLASS wc = {};
     wc.lpfnWndProc = WindowProc;
@@ -186,7 +244,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     RegisterClass(&wc);
 
-    HWND hwnd = CreateWindowEx(0, CLASS_NAME, "PNG Viewer", WS_OVERLAPPEDWINDOW,
+    HWND hwnd = CreateWindowEx(0, CLASS_NAME, "BMP Viewer", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
         nullptr, nullptr, hInstance, nullptr);
 
