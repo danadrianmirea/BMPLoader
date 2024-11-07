@@ -1,0 +1,8 @@
+[
+{
+  "directory": "C:/adi/src/BMPLoaderWin32/build/code",
+  "command": "C:\\msys64\\ucrt64\\bin\\g++.exe   -g -std=gnu++23 -o CMakeFiles\\BMPLoaderWin32.dir\\main.cpp.obj -c C:\\adi\\src\\BMPLoaderWin32\\code\\main.cpp",
+  "file": "C:/adi/src/BMPLoaderWin32/code/main.cpp",
+  "output": "code/CMakeFiles/BMPLoaderWin32.dir/main.cpp.obj"
+}
+]

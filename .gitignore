@@ -2,6 +2,5 @@
 *.exe
 *.idea
 
-/build/
 /libraries/
 cmake

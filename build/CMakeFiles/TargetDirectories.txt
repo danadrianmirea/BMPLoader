@@ -1,0 +1,5 @@
+C:/adi/src/BMPLoaderWin32/build/CMakeFiles/edit_cache.dir
+C:/adi/src/BMPLoaderWin32/build/CMakeFiles/rebuild_cache.dir
+C:/adi/src/BMPLoaderWin32/build/code/CMakeFiles/BMPLoaderWin32.dir
+C:/adi/src/BMPLoaderWin32/build/code/CMakeFiles/edit_cache.dir
+C:/adi/src/BMPLoaderWin32/build/code/CMakeFiles/rebuild_cache.dir
